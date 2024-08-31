@@ -1,20 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { Context, Telegraf } from 'telegraf';
+import { Context, Telegraf, Composer } from 'telegraf';
 import { UsersService } from 'src/users/users.service';
 import { LocationService } from 'src/location/location.service';
 import axios from 'axios';
 import * as cron from 'node-cron';
-import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class BotService {
   private bot: Telegraf;
   private user: any;
+  private attempts: number;
+  private userSubscriptionState = new Map<string, boolean>();
 
-  constructor(
-    private readonly usersService: UsersService,
-    private readonly locationService: LocationService,
-  ) {
+  constructor(private readonly usersService: UsersService) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
     if (!botToken) {
@@ -26,6 +24,9 @@ export class BotService {
     this.bot.start(async (ctx) => {
       const { id: telegramId, username, first_name: firstName } = ctx.from;
       const tempUser = await this.usersService.findOne(ctx.from.id.toString());
+      console.log('+++++++++++++++++++++tempUser++++++++++++++++++++++++++');
+      console.log(tempUser);
+      console.log('+++++++++++++++++++++tempUser++++++++++++++++++++++++++');
       if (tempUser) {
         this.user = tempUser;
         if (this.user.isSubscribed)
@@ -45,71 +46,241 @@ export class BotService {
           languageCode: ctx.from.language_code,
         };
         this.user = await this.usersService.createUser(data);
+        console.log('+++++++++++++++++++++this.user++++++++++++++++++++++++++');
+        console.log(this.user);
+        console.log('+++++++++++++++++++++this.user++++++++++++++++++++++++++');
         ctx.reply(
           `Welcome! ${ctx.from.username}\nType /subscribe to get daily weather updates.\nSend your location to get weather info around you.`,
         );
       }
     });
 
-    this.bot.on('text', (ctx) => {
-      ctx.reply(`${ctx.message.text}`);
-    });
-
     this.bot.on('location', async (ctx) => {
       const { latitude, longitude } = ctx.message.location;
-      const { id: telegramId, username, first_name: firstName } = ctx.from;
-      const tempUser = await this.usersService.findOne(ctx.from.id.toString());
-      // TODO : display forecast nomatter what
-      if (!tempUser) {
-        const createUserData = {
-          telegramId: telegramId.toString(),
-          username,
-          firstName,
-          languageCode: ctx.from.language_code,
-          location: {
-            create: {
-              latitude,
-              longitude,
-            },
-          },
-        };
-        this.user = await this.usersService.createUser(createUserData);
-      } else {
-        if (
-          !(
-            tempUser.location.latitude === latitude &&
-            tempUser.location.longitude === longitude
-          )
-        ) {
+      const isSubscribing = this.userSubscriptionState.get(
+        ctx.from.id.toString(),
+      );
+
+      console.log('isSubscribing: ', isSubscribing);
+      console.log('userSubscriptionState', this.userSubscriptionState);
+
+      if (isSubscribing) {
+        const locationUpdated = await this.usersService.updateUserWithLocation(
+          ctx.from.id.toString(),
+          {},
+          { latitude, longitude },
+        );
+        // Ask for preferred time
+        if (locationUpdated)
           ctx.reply(
-            `Your subscribed location is different do you want to updated your subscribed location to this one?\nType "yes" to update location, type "no" otherwise`,
+            'Location saved. At what time would you like to receive daily weather updates? (e.g., 08:00)',
           );
-          this.bot.on('text', async (ctx) => {
-            const response = ctx.message.text;
-            if (response.toLowerCase() === 'yes') {
-              this.user = await this.usersService.updateUserWithLocation(
-                this.user.id,
-                this.user,
-                {
-                  latitude,
-                  longitude,
-                },
-              );
-            } else if (response.toLowerCase() === 'no') {
+      } else {
+        //   const weatherData = await this.getWeatherUpdateForUser(
+        //     latitude,
+        //     longitude,
+        //   );
+        //   this.bot.telegram.sendMessage(
+        //     telegramId,
+        //     `
+        //   Weather for ${weatherData.location}
+
+        //   - Condition: ${weatherData.condition}
+        //   - Temperature: ${weatherData.temperature}℃ (Feels like: ${weatherData.feels_like}℃)
+        //   - Humidity: ${weatherData.humidity}%
+        //   - Wind: ${weatherData.wind.speed} m/s, direction ${weatherData.wind.direction}° with gusts up to ${weatherData.wind.gusts} m/s
+        //   - Pressure: ${weatherData.pressure} hPa
+        //   - Cloud Cover: ${weatherData.cloud_cover}%
+        //   - Visibility: ${weatherData.visibility} km
+
+        //   Sunrise: ${weatherData.sunrise}
+        //   Sunset: ${weatherData.sunset}
+        // `,
+        //   );
+        ctx.reply('Location Data');
+      }
+    });
+
+    this.bot.command('subscribe', async (ctx) => {
+      this.attempts = 5;
+      const {
+        id: telegramId,
+        username,
+        first_name: firstName,
+      } = ctx.message.from;
+      if (!this.user) {
+        const tempUser = await this.usersService.findOne(telegramId.toString());
+        if (!tempUser) {
+          const data = {
+            telegramId: telegramId.toString(),
+            username,
+            firstName,
+            languageCode: ctx.from.language_code,
+          };
+          this.user = await this.usersService.createUser(data);
+        }
+        this.user = tempUser;
+      }
+
+      if (this.user.isSubscribed) {
+        ctx.reply(
+          `Welcome ${ctx.from.username}\nYou are already subscribed to Weather Buddy. Your weather updates are scheduled at ${this.user.preferredTime} every day.\n\nTo unsubscribe, type /unsubscribe.`,
+        );
+      } else {
+        const telegramId = ctx.from.id.toString();
+        this.userSubscriptionState.set(telegramId, true);
+        ctx.reply(
+          'Thanks for subscribing to Weather Buddy.\nBefore making you a Weather Buddy subscriber, we need a few of your preferences. Kindly answer a few questions.\n\nPlease enter the time you would like to receive the weather update (in HH:mm format) Eg. 09:15, 17:30, etc.',
+        );
+      }
+
+      /* if (this.user.isSubscribed) {
+        } else {
+        let attempts = 5;
+      
+      // Create a middleware to handle the time input
+      const timeInputHandler = new Composer<Context>();
+      
+      timeInputHandler.on('text', async (ctx) => {
+        const time = ctx.message.text;
+        const isValidTime = this.validateTimeFormat(time);
+        
+        if (isValidTime) {
+          // if(!this.user.location){
+            //   ctx.reply(`Now share your location.`)
+            
+            // }
+            await this.usersService.updateUser(telegramId.toString(), {
+              preferredTime: time,
+              isSubscribed: true,
+              });
+              
+              ctx.reply(`I'll provide a weather forecast at ${time} every day.`);
+              this.scheduleWeatherUpdate(this.user, time);
+              
+              // Remove this handler after success
+              this.bot.use(timeInputHandler.middleware());
+              // Clear the middleware stack for this handler
+              timeInputHandler.middleware = () => (ctx, next) => next();
+              } else {
+            attempts -= 1;
+          
+          if (attempts > 0) {
               ctx.reply(
-                `Your location data is not updated.\n\nYour weather updates are scheduled at ${this.user.preferredTime} everyday.\n\nTo unsubscribe type /unsubscribe`,
+                'Invalid time format. Please enter the time in HH:mm format.',
               );
             } else {
               ctx.reply(
-                `Whoops!! Seems like you mistyped something.\n\nNo worry, I got you. Your location data is not updated.\n\nYour weather updates are scheduled at ${this.user.preferredTime} everyday.\n\nTo unsubscribe type /unsubscribe`,
-              );
-            }
-          });
-        } else {
-        }
+                'Too many invalid attempts. Please try subscribing again later.',
+                );
+                
+                // Remove this handler after too many invalid attempts
+                this.bot.use(timeInputHandler.middleware());
+                // Clear the middleware stack for this handler
+                timeInputHandler.middleware = () => (ctx, next) => next();
+                }
+                }
+        });
+
+        // Register the middleware for text handling
+        this.bot.use(timeInputHandler.middleware());
+      } */
+    });
+
+    this.bot.command('unsubscribe', async (ctx) => {
+      if (this.user && !this.user.isSubscribed) {
+        ctx.reply(`Your are not a subscriber`);
       }
-      /* 
-      ctx.reply(`
+      const userUpdateData = {
+        isSubscribed: false,
+        preferredTime: null,
+      };
+      const userLocationUpdateData = {
+        latitude: null,
+        longitude: null,
+      };
+      await this.usersService.updateUserWithLocation(
+        ctx.from.id.toString(),
+        userUpdateData,
+        userLocationUpdateData,
+      );
+      ctx.reply(
+        `You have been unsubscribed from Weather Buddy.\nBut don't you worry, if you ever changed your mind, type /subscribe to subscribe again.`,
+      );
+    });
+
+    this.bot.on('text', async (ctx) => {
+      const telegramId = ctx.from.id.toString();
+      const isSubscribing = this.userSubscriptionState.get(telegramId);
+
+      if (isSubscribing) {
+        const time = ctx.message.text;
+        const isValidTime = this.validateTimeFormat(time);
+
+        if (isValidTime) {
+          //TODO: update time on db and make isSubscribed: true
+          const updatedData = {
+            preferredTime: time,
+            isSubscribed: true,
+          };
+          const user = await this.usersService.updateUser(
+            ctx.from.id.toString(),
+            updatedData,
+          );
+
+          this.userSubscriptionState.delete(telegramId);
+          this.scheduleWeatherUpdate(this.user, time);
+
+          ctx.reply(
+            `You're now subscribed to daily weather updates at ${time} for your current location.`,
+          );
+        } else {
+          this.attempts -= 1;
+
+          if (this.attempts > 0) {
+            ctx.reply(
+              'Invalid time format. Please enter the time in HH:mm format(24hrs format).',
+            );
+          } else {
+            ctx.reply(
+              'Too many invalid attempts. Please try subscribing again later.',
+            );
+            this.userSubscriptionState.delete(telegramId);
+          }
+        }
+      } else {
+        ctx.reply(`You said: ${ctx.message.text}`);
+      }
+    });
+
+    this.bot.launch();
+  }
+
+  async onModuleInit() {
+    const users = await this.usersService.getAllUsers();
+    for (const user of users) {
+      if (user.isSubscribed && user.preferredTime) {
+        this.scheduleWeatherUpdate(user.isSubscribed, user.preferredTime);
+      }
+    }
+  }
+
+  public validateTimeFormat(time: string): boolean {
+    const regex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    return regex.test(time);
+  }
+
+  private scheduleWeatherUpdate(associatedUser: any, time: string) {
+    const [hour, minute] = time.split(':').map(Number);
+    const cronExpression = `${minute} ${hour} * * *`;
+    cron.schedule(cronExpression, async () => {
+      const weatherData = await this.getWeatherUpdateForUser(
+        associatedUser.location.latitude,
+        associatedUser.location.longitude,
+      );
+      this.bot.telegram.sendMessage(
+        associatedUser.telegramId,
+        `
       Weather for ${weatherData.location}
     
       - Condition: ${weatherData.condition}
@@ -122,102 +293,13 @@ export class BotService {
     
       Sunrise: ${weatherData.sunrise}
       Sunset: ${weatherData.sunset}
-    `); */
-    });
-
-    this.bot.command('subscribe', async (ctx) => {
-      const {
-        id: telegramId,
-        username,
-        first_name: firstName,
-      } = ctx.message.from;
-      const tempUser = await this.usersService.findOne(ctx.from.id.toString());
-      if (tempUser) {
-        this.user = tempUser;
-        if (this.user.isSubscribed)
-          ctx.reply(
-            `Welcome ${ctx.from.username}\nYou are already subscribed to Weather Buddy. Your weather updates are scheduled at ${this.user.preferredTime} everyday.\nIf you want to change your location, just send your current location.\n\nTo unsubscribe type /unsubscribe.`,
-          );
-      } else {
-        const data = {
-          telegramId: telegramId.toString(),
-          username,
-          firstName,
-          languageCode: ctx.from.language_code,
-        };
-        this.user = await this.usersService.createUser(data);
-
-        ctx.reply(
-          'Thanks for subscribing to Weather Buddy.\nBefore making you a Weather Buddy subscriber, we need a few of your preferences. Kindly answer a few questions.\n\nPlease enter the time you would like to receive the weather update (in HH:mm format) Eg. 09:15, 17:30, etc.',
-        );
-
-        let attempts = 5;
-
-        const messageHandler = async (ctx) => {
-          const time = ctx.message.text;
-          const isValidTime = this.validateTimeFormat(time);
-
-          if (isValidTime) {
-            const { id: telegramId } = ctx.from;
-            await this.usersService.updateUser(telegramId.toString(), {
-              preferredTime: time,
-              isSubscribed: true,
-            });
-
-            ctx.reply(`I'll provide a weather forecast at ${time} every day.`);
-            this.scheduleWeatherUpdate(time);
-
-            // Remove the listener after success
-            this.bot.stop('Thanks for subscribing!!');
-          } else {
-            attempts -= 1;
-
-            if (attempts > 0) {
-              ctx.reply(
-                'Invalid time format. Please enter the time in HH:mm format.',
-              );
-            } else {
-              this.bot.stop(
-                'Too many invalid attempts. Please try subscribing again later.',
-              ); // Remove listener after attempts exceeded
-            }
-          }
-        };
-        this.bot.on('text', messageHandler);
-      }
-    });
-
-    this.bot.launch();
-  }
-  public validateTimeFormat(time: string): boolean {
-    const regex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    return regex.test(time);
-  }
-
-  private scheduleWeatherUpdate(time: string) {
-    const [hour, minute] = time.split(':').map(Number);
-    const cronExpression = `${minute} ${hour} * * *`;
-    cron.schedule(cronExpression, async () => {
-      const weatherUpdate = await this.getWeatherUpdateForUser();
-      this.bot.telegram.sendMessage(
-        this.user.telegramId,
-        `Here is your weather update: ${weatherUpdate}`,
+    `,
       );
     });
   }
 
-  public async sendWeatherUpdate(chatId: number, weatherInfo: string) {
-    await this.bot.telegram.sendMessage(
-      chatId,
-      `Today's weather: ${weatherInfo}`,
-    );
-  }
-
-  private async getWeatherUpdateForUser() {
-    const weatherInfo = await this.getWeatherInfo(
-      this.user.location.latitude,
-      this.user.location.longitude,
-    );
+  private async getWeatherUpdateForUser(latitude: number, longitude: number) {
+    const weatherInfo = await this.getWeatherInfo(latitude, longitude);
     const weatherData = this.transformWeatherJson(weatherInfo);
     return weatherData;
   }

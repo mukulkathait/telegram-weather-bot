@@ -8,19 +8,24 @@ export class UsersService {
 
   createUser(createUserDto: Prisma.UserCreateInput) {
     return this.databaseService.user.create({
-      data: createUserDto,
+      data: {
+        ...createUserDto,
+        location: {
+          create: {},
+        },
+      },
       include: {
         location: true,
       },
     });
   }
 
-  findAll() {
-    return `This action returns all users`;
+  getAllUsers() {
+    return this.databaseService.user.findMany();
   }
 
   findOne(telegramId: string) {
-    return this.databaseService.user.findUnique({
+    return this.databaseService.user.findFirst({
       where: {
         telegramId,
       },

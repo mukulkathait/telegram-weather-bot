@@ -28,3 +28,15 @@ model Location {
   user      User   @relation(fields: [userId], references: [id])
   userId    String @unique
 }
+
+model Admin {
+  id        String   @id @default(cuid())
+  googleId  String?  @unique
+  email     String   @unique
+  password  String?
+  username  String?
+  avatarUrl String?
+  role      String   @default("admin") // You can use this field for role-based access if needed in the future
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

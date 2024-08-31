@@ -8,9 +8,11 @@ import { DatabaseModule } from './database/database.module';
 import { UsersModule } from './users/users.module';
 import { LocationService } from './location/location.service';
 import { LocationModule } from './location/location.module';
+import { AuthModule } from './auth/auth.module';
+import { AdminUserModule } from './admin-user/admin-user.module';
 
 @Module({
-  imports: [BotModule, AdminModule, ConfigModule.forRoot({}), DatabaseModule, UsersModule, LocationModule],
+  imports: [BotModule, AdminModule, ConfigModule.forRoot({}), DatabaseModule, UsersModule, LocationModule, AuthModule, AdminUserModule],
   controllers: [AppController],
   providers: [AppService, LocationService],
 })
