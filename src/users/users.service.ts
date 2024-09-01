@@ -21,7 +21,11 @@ export class UsersService {
   }
 
   getAllUsers() {
-    return this.databaseService.user.findMany();
+    return this.databaseService.user.findMany({
+      include: {
+        location: true,
+      },
+    });
   }
 
   findOne(telegramId: string) {
