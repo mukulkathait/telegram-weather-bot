@@ -31,10 +31,8 @@ export class AuthController {
   }
 
   @Post('google-login')
-  async googleLogin(
-    @Body() req: { googleId: string; email: string; avatarUrl?: string },
-  ) {
-    return this.authService.googleLogin(req.googleId, req.email, req.avatarUrl);
+  async googleLogin(@Body() req: { idToken: string }) {
+    return this.authService.googleLogin(req.idToken);
   }
 
   @UseGuards(JwtAuthGuard)

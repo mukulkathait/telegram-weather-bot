@@ -72,7 +72,33 @@ export class UsersService {
     });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  blockUser(id: string) {
+    return this.databaseService.user.update({
+      where: {
+        id,
+      },
+      data: {
+        isblocked: true,
+      },
+    });
+  }
+
+  unblockUser(id: string) {
+    return this.databaseService.user.update({
+      where: {
+        id,
+      },
+      data: {
+        isblocked: false,
+      },
+    });
+  }
+
+  deleteUser(id: string) {
+    return this.databaseService.user.delete({
+      where: {
+        id,
+      },
+    });
   }
 }

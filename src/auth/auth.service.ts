@@ -1,14 +1,19 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DatabaseService } from '../database/database.service';
+import { OAuth2Client } from 'google-auth-library';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class AuthService {
+  private oauthClient: OAuth2Client;
+
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) {
+    this.oauthClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  }
 
   async validateUser(email: string, pass: string): Promise<any> {
     const admin = await this.databaseService.admin.findUnique({
@@ -32,7 +37,15 @@ export class AuthService {
     };
   }
 
-  async googleLogin(googleId: string, email: string, avatarUrl?: string) {
+  async googleLogin(idToken: string) {
+    const ticket = await this.oauthClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, picture: avatarUrl } = payload;
+
     let admin = await this.databaseService.admin.findUnique({
       where: { googleId },
     });
