@@ -45,8 +45,5 @@ export class AuthController {
 
   @Get('testing')
   @UseGuards(JwtAuthGuard)
-  testing(@Req() req: Request) {
-    console.log('Inside authcontroller testing method');
-    console.log(req.user);
-  }
+  testing(@Req() req: Request) {}
 }

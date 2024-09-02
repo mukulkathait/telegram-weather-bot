@@ -25,7 +25,7 @@ model Location {
   id        String @id @default(cuid())
   latitude  Float?
   longitude Float?
-  user      User   @relation(fields: [userId], references: [id])
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String @unique
 }
 

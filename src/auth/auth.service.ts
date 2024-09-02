@@ -3,7 +3,6 @@ import { JwtService } from '@nestjs/jwt';
 import { DatabaseService } from '../database/database.service';
 import { OAuth2Client } from 'google-auth-library';
 import * as bcrypt from 'bcryptjs';
-import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuthService {

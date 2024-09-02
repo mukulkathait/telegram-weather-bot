@@ -1,5 +1,6 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { ApiService } from 'src/api/api.service';
+import { EncryptionUtilityService } from 'src/encryption-utility/encryption-utility.service';
 
 interface ApiKeysInterface {
   id: string;
@@ -16,12 +17,22 @@ export class CacheService {
   constructor(
     @Inject(forwardRef(() => ApiService))
     private readonly apiService: ApiService,
+    private readonly encryptionService: EncryptionUtilityService,
   ) {}
 
   async getApiKeys(): Promise<ApiKeysInterface> {
     if (!this.apiKeys) {
       const apiKeysResponse = await this.apiService.getApis();
-      this.apiKeys = apiKeysResponse[0];
+      (apiKeysResponse[0].telegram_bot_token = this.encryptionService.decrypt(
+        apiKeysResponse[0].telegram_bot_token,
+      )),
+        (apiKeysResponse[0].weather_api_key = this.encryptionService.decrypt(
+          apiKeysResponse[0].weather_api_key,
+        )),
+        (apiKeysResponse[0].jwt_secret = this.encryptionService.decrypt(
+          apiKeysResponse[0].jwt_secret,
+        )),
+        (this.apiKeys = apiKeysResponse[0]);
     }
     return this.apiKeys;
   }

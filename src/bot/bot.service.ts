@@ -3,6 +3,7 @@ import { Telegraf } from 'telegraf';
 import { UsersService } from 'src/users/users.service';
 import axios from 'axios';
 import * as cron from 'node-cron';
+import { CacheService } from 'src/cache/cache.service';
 
 @Injectable()
 export class BotService {
@@ -28,15 +29,42 @@ export class BotService {
   private attempts: number;
   private userSubscriptionState = new Map<string, boolean>();
 
-  constructor(private readonly usersService: UsersService) {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly cacheService: CacheService,
+  ) {}
+
+  async onModuleInit() {
+    const botToken = await this.cacheService.getBotToken();
 
     if (!botToken) {
-      throw new Error('TELEGRAM_BOT_API environment variable is not set');
+      throw new Error('Telegram bot token is not set in the database');
     }
 
     this.bot = new Telegraf(botToken);
 
+    this.initializeBot();
+
+    this.bot.launch();
+
+    // Schedule weather updates for all subscribed users
+    const users = await this.usersService.getAllUsers();
+    for (const user of users) {
+      if (user.isSubscribed && user.preferredTime) {
+        const location = {
+          latitude: user.location.latitude,
+          longitude: user.location.longitude,
+        };
+        this.scheduleWeatherUpdate(
+          user.telegramId,
+          location,
+          user.preferredTime,
+        );
+      }
+    }
+  }
+
+  private initializeBot() {
     this.bot.start(async (ctx) => {
       const { id: telegramId, username, first_name: firstName } = ctx.from;
       const tempUser = await this.usersService.findOne(ctx.from.id.toString());
@@ -48,7 +76,7 @@ export class BotService {
           );
         else {
           ctx.reply(
-            `Welcome ${ctx.from.username}\nSeems like you are not a Weather Buddy subcriber. Type /subscribe to get daily weather updates. Send your location to get weather info around you.\n\nType /help, if you feel lost.`,
+            `Welcome ${ctx.from.username}\nSeems like you are not a Weather Buddy subscriber. Type /subscribe to get daily weather updates. Send your location to get weather info around you.\n\nType /help, if you feel lost.`,
           );
         }
       } else {
@@ -83,7 +111,7 @@ export class BotService {
         // Ask for preferred time
         if (locationUpdated)
           ctx.reply(
-            'Your location have been updated successfully.\n\nAt what time would you like to receive daily weather updates? (e.g., 08:00,18:00)',
+            'Your location has been updated successfully.\n\nAt what time would you like to receive daily weather updates? (e.g., 08:00,18:00)',
           );
       } else {
         const weatherData = await this.getWeatherUpdateForUser(
@@ -107,7 +135,6 @@ export class BotService {
           Sunset: ${weatherData.sunset}
         `,
         );
-        ctx.reply('Location Data');
       }
     });
 
@@ -171,7 +198,7 @@ export class BotService {
 
     this.bot.command('help', (ctx) => {
       ctx.reply(
-        `Here are some commands that can be used to navigate Weather Buddy.\n\n/start: To activate Weather Buddy.\n/subscribe : To get subscribed to Weather Buddy for daily weather updates of your location.\n/unsubscribe: To unsubscribe from Weather Buddy.\n\nFurther, you can send your location any time to get weather updates near you. How?\nTo get weather info of your current location, send us you location by clicking attach icon on the bottom right side of your screen, beside microphone icon. Then press Location icon, then press "Send selected location".`,
+        `Here are some commands that can be used to navigate Weather Buddy.\n\n/start: To activate Weather Buddy.\n/subscribe : To get subscribed to Weather Buddy for daily weather updates of your location.\n/unsubscribe: To unsubscribe from Weather Buddy.\n/help: If you are having hard time navigating Weather Buddy.\n\nFurther, you can send your location any time to get weather updates near you. How?\nTo get weather info of your current location, send us you location by clicking attach icon on the bottom right side of your screen, beside microphone icon. Then press Location icon, then press "Send selected location".`,
       );
     });
 
@@ -184,7 +211,6 @@ export class BotService {
         const isValidTime = this.validateTimeFormat(time);
 
         if (isValidTime) {
-          //TODO: update time on db and make isSubscribed: true
           const updatedData = {
             preferredTime: time,
             isSubscribed: true,
@@ -206,45 +232,27 @@ export class BotService {
           );
 
           ctx.reply(
-            `Hurray, You're now a Weather Buddy subscriber.\nYou'll receive daily weather updates at ${time} for your current location.\n\nIf you ever want to unsubscribe from Weather Buddy, type /unsubscribe`,
+            `Perfect! You are now subscribed to Weather Buddy. I'll provide weather updates at ${time} every day. To unsubscribe, type /unsubscribe.\n\nType /help, if you feel lost.`,
           );
         } else {
-          this.attempts -= 1;
-
+          this.attempts--;
           if (this.attempts > 0) {
             ctx.reply(
-              'Invalid time format. Please enter the time in HH:mm format(24hrs format).',
+              `Oops! Seems like ${ctx.message.text} is not a valid time. Please try again. (${this.attempts} attempts left)`,
             );
           } else {
-            ctx.reply(
-              'Too many invalid attempts. Please try subscribing again later.',
-            );
             this.userSubscriptionState.delete(telegramId);
+            ctx.reply(
+              `Maximum attempts exceeded. Please try again by typing /subscribe.`,
+            );
           }
         }
       } else {
-        ctx.reply(`You said: ${ctx.message.text}`);
-      }
-    });
-
-    this.bot.launch();
-  }
-
-  async onModuleInit() {
-    const users = await this.usersService.getAllUsers();
-    for (const user of users) {
-      if (user.isSubscribed && user.preferredTime) {
-        const location = {
-          latitude: user.location.latitude,
-          longitude: user.location.longitude,
-        };
-        this.scheduleWeatherUpdate(
-          user.telegramId,
-          location,
-          user.preferredTime,
+        ctx.reply(
+          `Seems like you're lost!! But don't worry, here are some commands that can be used to navigate Weather Buddy.\n\n/start: To activate Weather Buddy.\n/subscribe : To get subscribed to Weather Buddy for daily weather updates of your location.\n/unsubscribe: To unsubscribe from Weather Buddy.\n/help: If you are having hard time navigating Weather Buddy.\n\nFurther, you can send your location any time to get weather updates near you. How?\nTo get weather info of your current location, send us you location by clicking attach icon on the bottom right side of your screen, beside microphone icon. Then press Location icon, then press "Send selected location".`,
         );
       }
-    }
+    });
   }
 
   private capitalizeFirstLetter(sentence: string): string {
@@ -298,7 +306,8 @@ export class BotService {
   }
 
   private async getWeatherInfo(latitude: number, longitude: number) {
-    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&exclude={part}&appid=${process.env.WEATHER_API_KEY}`;
+    const weatherApiKey = await this.cacheService.getWeatherApiKey();
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&exclude={part}&appid=${weatherApiKey}`;
     console.log('URL : ', url);
     try {
       const response = await axios.get(url);

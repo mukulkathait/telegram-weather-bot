@@ -21,7 +21,7 @@ export class ApiController {
   @Get()
   async getAllKeys() {
     const apikeys = await this.apiService.getApis();
-    console.log(apikeys[0]);
+
     apikeys[0].telegram_bot_token = this.encryptionService.decrypt(
       apikeys[0].telegram_bot_token,
     );

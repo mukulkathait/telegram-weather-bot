@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
@@ -28,7 +29,7 @@ export class UsersController {
 
   @Patch('block/:id')
   @UseGuards(JwtAuthGuard)
-  blockUser(@Param('id') id: string) {
+  blockUser(@Param('id') id: string, @Req() req: Request) {
     return this.userService.blockUser(id);
   }
 
