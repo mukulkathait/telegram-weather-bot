@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request } from 'express';
 import { LocalGuard } from './guards/local.guard';
+import { GoogleAuthGuard } from './guards/google.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -21,9 +22,14 @@ export class AuthController {
     return this.authService.signup(req.email, req.password, req.username);
   }
 
-  @Post('google-login')
-  async googleLogin(@Body() req: { idToken: string }) {
-    return this.authService.googleLogin(req.idToken);
+  @Get('google-login')
+  @UseGuards(GoogleAuthGuard)
+  googleLogin(@Req() req: Request) {}
+
+  @Get('google/redirect')
+  @UseGuards(GoogleAuthGuard)
+  handleRedirect(@Req() req: Request) {
+    return req.user;
   }
 
   @UseGuards(JwtAuthGuard)

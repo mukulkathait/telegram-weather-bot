@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DatabaseService } from '../database/database.service';
 import { OAuth2Client } from 'google-auth-library';
 import * as bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -30,39 +31,6 @@ export class AuthService {
     return null;
   }
 
-  async login(admin: any) {
-    const payload = { email: admin.email, sub: admin.id };
-    return {
-      access_token: this.jwtService.sign(payload),
-    };
-  }
-
-  async googleLogin(idToken: string) {
-    const ticket = await this.oauthClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    const payload = ticket.getPayload();
-    const { sub: googleId, email, picture: avatarUrl } = payload;
-
-    let admin = await this.databaseService.admin.findUnique({
-      where: { googleId },
-    });
-
-    if (!admin) {
-      admin = await this.databaseService.admin.create({
-        data: {
-          googleId,
-          email,
-          avatarUrl,
-        },
-      });
-    }
-
-    return this.login(admin);
-  }
-
   async signup(email: string, password: string, username?: string) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -71,6 +39,54 @@ export class AuthService {
         email,
         password: hashedPassword,
         username,
+      },
+    });
+
+    return this.login(admin);
+  }
+
+  async login(admin: any) {
+    const payload = { email: admin.email, sub: admin.id };
+    return {
+      access_token: this.jwtService.sign(payload),
+    };
+  }
+
+  async validateGoogleUser({
+    googleId,
+    email,
+    avatarUrl,
+    username,
+  }: {
+    googleId: string;
+    email?: string;
+    avatarUrl?: string;
+    username?: string;
+  }): Promise<any> {
+    let admin = await this.databaseService.admin.findUnique({
+      where: {
+        googleId,
+      },
+    });
+
+    if (!admin) {
+      admin = await this.databaseService.admin.create({
+        data: {
+          googleId,
+          email,
+          avatarUrl,
+          username,
+        },
+      });
+    }
+
+    return this.login(admin);
+  }
+
+  async findUser(id: string) {
+    const admin = await this.databaseService.admin.findFirst({
+      where: {
+        id,
       },
     });
 

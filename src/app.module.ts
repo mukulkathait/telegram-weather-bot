@@ -12,6 +12,8 @@ import { EncryptionUtilityService } from './encryption-utility/encryption-utilit
 import { EncryptionUtilityModule } from './encryption-utility/encryption-utility.module';
 import { CacheService } from './cache/cache.service';
 import { CacheModule } from './cache/cache.module';
+import { PassportModule } from '@nestjs/passport';
+import { SessionSerializer } from './auth/strategy/serializer';
 
 @Module({
   imports: [
@@ -24,8 +26,14 @@ import { CacheModule } from './cache/cache.module';
     ApiModule,
     EncryptionUtilityModule,
     CacheModule,
+    PassportModule.register({ session: true }),
   ],
   controllers: [AppController],
-  providers: [AppService, EncryptionUtilityService, CacheService],
+  providers: [
+    AppService,
+    EncryptionUtilityService,
+    CacheService,
+    // SessionSerializer,
+  ],
 })
 export class AppModule {}
