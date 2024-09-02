@@ -25,7 +25,7 @@ export class AuthService {
       (await bcrypt.compare(pass, admin.password))
     ) {
       const { password, ...result } = admin;
-      return result;
+      return this.login(result);
     }
     return null;
   }

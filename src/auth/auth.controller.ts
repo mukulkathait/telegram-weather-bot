@@ -1,26 +1,17 @@
-import {
-  Controller,
-  Post,
-  Body,
-  UseGuards,
-  UnauthorizedException,
-  Req,
-} from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './jwt-auth.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request } from 'express';
+import { LocalGuard } from './guards/local.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() req: { email: string; password: string }) {
-    const admin = await this.authService.validateUser(req.email, req.password);
-    if (!admin) {
-      throw new UnauthorizedException();
-    }
-    return this.authService.login(admin);
+  @UseGuards(LocalGuard)
+  async login(@Req() req: Request) {
+    return req.user;
   }
 
   @Post('signup')
@@ -39,5 +30,12 @@ export class AuthController {
   @Post('profile')
   getProfile(@Req() req: Request) {
     return req.user;
+  }
+
+  @Get('testing')
+  @UseGuards(JwtAuthGuard)
+  testing(@Req() req: Request) {
+    console.log('Inside authcontroller testing method');
+    console.log(req.user);
   }
 }
