@@ -22,6 +22,11 @@ export class AuthController {
     return this.authService.signup(req.email, req.password, req.username);
   }
 
+  @Post('google-auth')
+  async googleAuthLogin(@Body() req: { idToken: string }) {
+    return this.authService.googleLogin(req.idToken);
+  }
+
   @Get('google-login')
   @UseGuards(GoogleAuthGuard)
   googleLogin(@Req() req: Request) {}

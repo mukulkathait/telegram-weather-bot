@@ -92,4 +92,35 @@ export class AuthService {
 
     return this.login(admin);
   }
+
+  async googleLogin(idToken: string) {
+    const ticket = await this.oauthClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const {
+      sub: googleId,
+      email,
+      picture: avatarUrl,
+      given_name: username,
+    } = payload;
+    let admin = await this.databaseService.admin.findUnique({
+      where: { googleId },
+    });
+
+    if (!admin) {
+      admin = await this.databaseService.admin.create({
+        data: {
+          googleId,
+          email,
+          avatarUrl,
+          username,
+        },
+      });
+    }
+
+    return this.login(admin);
+  }
 }
