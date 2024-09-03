@@ -1,14 +1,14 @@
-// {
-//   "extends": "./tsconfig.json",
-//   "compilerOptions": {
-//     "outDir": "./public", // Change to 'public'
-//     "declaration": false,
-//     "sourceMap": false
-//   },
-//   "include": ["src/**/*.ts"]
-// }
-
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "compilerOptions": {
+    "outDir": "./public", // Change to 'public'
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts"]
 }
+
+// {
+//   "extends": "./tsconfig.json",
+//   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+// }
