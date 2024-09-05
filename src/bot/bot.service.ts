@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Telegraf } from 'telegraf';
+import { Telegraf, Context } from 'telegraf';
 import { UsersService } from 'src/users/users.service';
 import axios from 'axios';
 import * as cron from 'node-cron';
@@ -66,6 +66,7 @@ export class BotService {
 
   private initializeBot() {
     this.bot.start(async (ctx) => {
+      if (await this.checkIfUserIsBlocked(ctx)) return;
       const { id: telegramId, username, first_name: firstName } = ctx.from;
       const tempUser = await this.usersService.findOne(ctx.from.id.toString());
       if (tempUser) {
@@ -94,6 +95,7 @@ export class BotService {
     });
 
     this.bot.on('location', async (ctx) => {
+      if (await this.checkIfUserIsBlocked(ctx)) return;
       const { latitude, longitude } = ctx.message.location;
       const isSubscribing = this.userSubscriptionState.get(
         ctx.from.id.toString(),
@@ -139,6 +141,7 @@ export class BotService {
     });
 
     this.bot.command('subscribe', async (ctx) => {
+      if (await this.checkIfUserIsBlocked(ctx)) return;
       this.attempts = 5;
       const {
         id: telegramId,
@@ -173,6 +176,7 @@ export class BotService {
     });
 
     this.bot.command('unsubscribe', async (ctx) => {
+      if (await this.checkIfUserIsBlocked(ctx)) return;
       if (this.user && !this.user.isSubscribed) {
         ctx.reply(
           `Whoops!! You're not a Weather Buddy subscriber I guess.\n\nType /help, if you feel lost.`,
@@ -196,13 +200,15 @@ export class BotService {
       );
     });
 
-    this.bot.command('help', (ctx) => {
+    this.bot.command('help', async (ctx) => {
+      if (await this.checkIfUserIsBlocked(ctx)) return;
       ctx.reply(
         `Here are some commands that can be used to navigate Weather Buddy.\n\n/start: To activate Weather Buddy.\n/subscribe : To get subscribed to Weather Buddy for daily weather updates of your location.\n/unsubscribe: To unsubscribe from Weather Buddy.\n/help: If you are having hard time navigating Weather Buddy.\n\nFurther, you can send your location any time to get weather updates near you. How?\nTo get weather info of your current location, send us you location by clicking attach icon on the bottom right side of your screen, beside microphone icon. Then press Location icon, then press "Send selected location".`,
       );
     });
 
     this.bot.on('text', async (ctx) => {
+      if (await this.checkIfUserIsBlocked(ctx)) return;
       const telegramId = ctx.from.id.toString();
       const isSubscribing = this.userSubscriptionState.get(telegramId);
 
@@ -253,6 +259,18 @@ export class BotService {
         );
       }
     });
+  }
+
+  private async checkIfUserIsBlocked(ctx: Context): Promise<boolean> {
+    const userId = ctx.from.id.toString();
+    const user = await this.usersService.findOne(userId);
+
+    if (user && user.isblocked) {
+      ctx.reply('BLOCKED BY ADMIN: You have been blocked by the admin!');
+      return true; // User is blocked
+    }
+
+    return false; // User is not blocked
   }
 
   private capitalizeFirstLetter(sentence: string): string {

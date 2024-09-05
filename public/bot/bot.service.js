@@ -43,6 +43,8 @@ let BotService = class BotService {
     }
     initializeBot() {
         this.bot.start(async (ctx) => {
+            if (await this.checkIfUserIsBlocked(ctx))
+                return;
             const { id: telegramId, username, first_name: firstName } = ctx.from;
             const tempUser = await this.usersService.findOne(ctx.from.id.toString());
             if (tempUser) {
@@ -65,6 +67,8 @@ let BotService = class BotService {
             }
         });
         this.bot.on('location', async (ctx) => {
+            if (await this.checkIfUserIsBlocked(ctx))
+                return;
             const { latitude, longitude } = ctx.message.location;
             const isSubscribing = this.userSubscriptionState.get(ctx.from.id.toString());
             console.log('isSubscribing: ', isSubscribing);
@@ -93,6 +97,8 @@ let BotService = class BotService {
             }
         });
         this.bot.command('subscribe', async (ctx) => {
+            if (await this.checkIfUserIsBlocked(ctx))
+                return;
             this.attempts = 5;
             const { id: telegramId, username, first_name: firstName, } = ctx.message.from;
             if (!this.user) {
@@ -118,6 +124,8 @@ let BotService = class BotService {
             }
         });
         this.bot.command('unsubscribe', async (ctx) => {
+            if (await this.checkIfUserIsBlocked(ctx))
+                return;
             if (this.user && !this.user.isSubscribed) {
                 ctx.reply(`Whoops!! You're not a Weather Buddy subscriber I guess.\n\nType /help, if you feel lost.`);
             }
@@ -132,10 +140,14 @@ let BotService = class BotService {
             this.user = await this.usersService.updateUserWithLocation(ctx.from.id.toString(), userUpdateData, userLocationUpdateData);
             ctx.reply(`You have been unsubscribed from Weather Buddy.\nBut don't you worry, if you ever changed your mind, type /subscribe to subscribe again.\nType /help, if you feel lost.`);
         });
-        this.bot.command('help', (ctx) => {
+        this.bot.command('help', async (ctx) => {
+            if (await this.checkIfUserIsBlocked(ctx))
+                return;
             ctx.reply(`Here are some commands that can be used to navigate Weather Buddy.\n\n/start: To activate Weather Buddy.\n/subscribe : To get subscribed to Weather Buddy for daily weather updates of your location.\n/unsubscribe: To unsubscribe from Weather Buddy.\n/help: If you are having hard time navigating Weather Buddy.\n\nFurther, you can send your location any time to get weather updates near you. How?\nTo get weather info of your current location, send us you location by clicking attach icon on the bottom right side of your screen, beside microphone icon. Then press Location icon, then press "Send selected location".`);
         });
         this.bot.on('text', async (ctx) => {
+            if (await this.checkIfUserIsBlocked(ctx))
+                return;
             const telegramId = ctx.from.id.toString();
             const isSubscribing = this.userSubscriptionState.get(telegramId);
             if (isSubscribing) {
@@ -170,6 +182,15 @@ let BotService = class BotService {
                 ctx.reply(`Seems like you're lost!! But don't worry, here are some commands that can be used to navigate Weather Buddy.\n\n/start: To activate Weather Buddy.\n/subscribe : To get subscribed to Weather Buddy for daily weather updates of your location.\n/unsubscribe: To unsubscribe from Weather Buddy.\n/help: If you are having hard time navigating Weather Buddy.\n\nFurther, you can send your location any time to get weather updates near you. How?\nTo get weather info of your current location, send us you location by clicking attach icon on the bottom right side of your screen, beside microphone icon. Then press Location icon, then press "Send selected location".`);
             }
         });
+    }
+    async checkIfUserIsBlocked(ctx) {
+        const userId = ctx.from.id.toString();
+        const user = await this.usersService.findOne(userId);
+        if (user && user.isblocked) {
+            ctx.reply('BLOCKED BY ADMIN: You have been blocked by the admin!');
+            return true;
+        }
+        return false;
     }
     capitalizeFirstLetter(sentence) {
         return sentence
