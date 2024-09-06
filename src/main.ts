@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import * as session from 'express-session';
 import * as passport from 'passport';
 import helmet from 'helmet';
+import * as cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import * as express from 'express';
 
@@ -21,6 +22,7 @@ async function bootstrap() {
   });
 
   app.use(helmet());
+  app.use(cookieParser());
 
   // app.use(
   //   rateLimit({

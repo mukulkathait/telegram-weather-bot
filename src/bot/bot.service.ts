@@ -67,6 +67,7 @@ export class BotService {
   private initializeBot() {
     this.bot.start(async (ctx) => {
       if (await this.checkIfUserIsBlocked(ctx)) return;
+
       const { id: telegramId, username, first_name: firstName } = ctx.from;
       const tempUser = await this.usersService.findOne(ctx.from.id.toString());
       if (tempUser) {

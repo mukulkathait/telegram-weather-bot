@@ -5,6 +5,7 @@ const app_module_1 = require("./app.module");
 const session = require("express-session");
 const passport = require("passport");
 const helmet_1 = require("helmet");
+const cookieParser = require("cookie-parser");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     app.enableCors({
@@ -13,6 +14,7 @@ async function bootstrap() {
         credentials: true,
     });
     app.use((0, helmet_1.default)());
+    app.use(cookieParser());
     app.use(session({
         secret: process.env.SESSION_SECRET,
         saveUninitialized: false,
